@@ -1,0 +1,55 @@
+// VerilogA for RF_project, VCO_JITTER, veriloga
+
+`include "constants.vams"
+`include "disciplines.vams"
+//`include "phase.vams"
+// (* ignore_hidden_state *)
+ module VCO_JITTER(VIN,VOUT);
+	input VIN;
+	output VOUT;
+
+	electrical VIN;
+	electrical VOUT;
+	
+	// 
+	parameter real Kvco = -3.2E9;
+
+	parameter real n = 4*`P_K*$temperature*50;
+	parameter real fc = 10E9;
+	parameter real f0 = 3.2E9;
+	parameter real Va = 1.0;
+	parameter real phase_noise = -110; //At 1MHz offset
+	parameter real offset = 1E6;
+
+	real phase1,phase2,phase3,vout ;
+	real ph_ns ;
+	real c ;	//Phase noise constant
+	real Jitter ; 	//Jitter contri evakuated from spec.
+	real dT; // dT = Jitter*gaussian variable of mean 0, SD 1
+	real fi; 	// Equivalent signal frequency with Jitter
+
+	real K = 2; 
+
+	analog begin
+
+		//NOISE ADDED BY NOISE SOURCES
+		phase1 = (2*`M_PI*idtmod(Kvco*V(VIN),0.0));
+		phase2 = flicker_noise(n,3,"Third order") + flicker_noise(n*fc,2,"Third order");
+
+		// NOISE BY JITTER
+		fi = f0/(1+(dT*f0));
+		phase3 = 2*`M_PI*fi;
+		ph_ns = pow(10,phase_noise/10);
+		c = ph_ns*pow(offset/f0,2);
+		Jitter = sqrt(c/f0);
+		dT = Jitter*sqrt(K);
+
+		//Output assignment
+		V(VOUT) <+ Va*cos(( phase1 + phase2 + phase3 )*$abstime);
+		$bound_step(0.05/f0);
+		
+		//Adding jitter twice per period
+		@(cross(V(VIN)-0.0,0));
+//			dT = Jitter*sqrt(K)*$rdist_normal(228001601,0.0,1.0);
+	end
+endmodule
